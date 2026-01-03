@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网站指定搜索小工具 | Site-Specific Searcher</title>
+    <style>
+        /* 定义全局 CSS 变量，便于统一维护色彩风格 */
+        :root {
+            --primary-color: #59b3eb; /* 主色调：主题蓝 */
+            --success-color: #3eba3c; /* 成功色：绿色 */
+            --bg-color: #f8f9fa;      /* 页面背景色：浅灰 */
+            --text-color: #202124;    /* 主要文字颜色：深黑 */
+            --border-color: #dadce0;  /* 常规边框颜色 */
+            --sub-text-color: #70757a;/* 辅助/次要文字颜色 */
+        }
+
+        /* 页面基础样式，采用 Flex 布局实现水平居中 */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+            margin: 0;
+        }
+
+        /* 主体卡片容器样式 */
+        .container {
+            width: 100%;
+            max-width: 700px;
+            background: white;
+            padding: 35px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        /* 头部标题与语言切换器的布局 */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        /* 页面标题字体样式 */
+        h1 { font-size: 22px; margin: 0; color: var(--primary-color); }
+
+        /* 语言选择下拉框样式 */
+        .lang-select {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background-color: white;
+            cursor: pointer;
+        }
+
+        /* 输入框区域组样式，控制间距 */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        /* 每一个输入行的布局 */
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* 标签列固定宽度，确保对齐 */
+        .row label {
+            width: 80px;
+            font-weight: bold;
+            font-size: 14px;
+            color: var(--sub-text-color);
+        }
+
+        /* 文本输入框通用样式 */
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            outline: none;
+            font-size: 15px;
+            transition: border 0.3s;
+        }
+
+        /* 输入框聚焦时的颜色变化 */
+        input[type="text"]:focus { border-color: var(--primary-color); }
+
+        /* 按钮通用基础样式 */
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+
+        /* 按钮悬停效果 */
+        button:hover { opacity: 0.9; }
+
+        /* 生成按钮的特定颜色 */
+        .btn-generate { background-color: var(--primary-color); color: white; }
+        /* 复制按钮的特定颜色 */
+        .btn-copy { background-color: var(--success-color); color: white; }
+        /* 描边型辅助按钮样式 */
+        .btn-outline { background: none; border: 1px solid var(--border-color); color: var(--sub-text-color); }
+
+        /* 网站列表管理区外层边距 */
+        .site-manager-area {
+            margin-top: 10px;
+        }
+
+        /* 网站列表滚动容器样式 */
+        .list-container {
+            border: 1px solid var(--border-color); border-radius: 8px;
+            max-height: 250px; overflow-y: auto; margin: 15px 0;
+        }
+
+        /* 网站列表中每一行的样式 */
+        .item-row {
+            display: flex; align-items: center; padding: 10px;
+            border-bottom: 1px solid var(--border-color); font-size: 14px;
+        }
+
+        /* 移除列表中最后一行的底边框 */
+        .item-row:last-child { border-bottom: none; }
+        /* 网站条目的点击区域布局 */
+        .item-row label { flex: 1; margin-left: 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        /* 网站备注的小字体样式 */
+        .site-note { color: var(--sub-text-color); font-size: 12px; font-weight: normal; }
+        /* 删除按钮样式 */
+        .delete-btn { color: #d93025; cursor: pointer; font-size: 18px; padding: 0 5px; }
+
+        /* 弹窗遮罩层：全屏固定并居中内容 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+
+        /* 弹窗主体内容框样式 */
+        .modal-content {
+            background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;
+            pointer-events: auto;
+        }
+
+        /* 添加网站弹窗内的输入项间距 */
+        .add-controls { display: flex; flex-direction: column; gap: 12px; margin-top: 15px; }
+
+        /* 导入导出文本框样式 */
+        .io-area {
+            width: 100%; height: 200px; margin: 15px 0; padding: 10px;
+            box-sizing: border-box; border-radius: 6px; border: 1px solid var(--border-color);
+            font-family: monospace; font-size: 12px;
+        }
+
+        /* 免责声明区域样式 */
+        .disclaimer {
+            margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border-color);
+            font-size: 12px; color: var(--sub-text-color); line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1 id="title">Search Command Generator</h1>
+        <select id="langSelect" class="lang-select" onchange="changeLang(this.value)">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+        </select>
+    </header>
+
+    <div class="input-group">
+        <div class="row">
+            <label id="lblKeyword">Keyword</label>
+            <input type="text" id="searchInput" placeholder="e.g. Artificial Intelligence">
+            <button onclick="generateCommand()" class="btn-generate" id="btnGen">Generate</button>
+        </div>
+
+        <div class="row">
+            <label id="lblCommand">Command</label>
+            <input type="text" id="resultInput" placeholder="Command will appear here...">
+            <button onclick="copyToClipboard()" class="btn-copy" id="btnCopy">Copy</button>
+        </div>
+    </div>
+
+    <div class="site-manager-area">
+        <div style="font-weight: bold; font-size: 14px; color: var(--sub-text-color);" id="lblSiteList">Target Sites</div>
+        <div id="siteList" class="list-container"></div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button onclick="openAddModal()" class="btn-outline" id="btnOpenAdd">Add Site</button>
+            <button onclick="openManageModal()" class="btn-outline" id="btnOpenManage">Batch Manage</button>
+        </div>
+    </div>
+
+    <div class="disclaimer">
+        <p><strong>免责声明：</strong>本工具仅提供搜索指令文本的合成服务。所有生成的搜索指令均需用户自行粘贴至第三方搜索引擎使用。本工具不与任何搜索引擎进行数据交互。请在遵守法律法规及相关平台服务条款的前提下使用。</p>
+        <p><strong>Disclaimer:</strong> This tool only provides search command synthesis. All commands must be manually pasted into third-party search engines. This tool does not interact with any search engines. Please use in compliance with laws and platform terms.</p>
+    </div>
+</div>
+
+<div id="addModal" class="modal-overlay" onclick="closeModals()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div style="font-weight: bold; font-size: 18px;" id="addModalTitle">Add New Site</div>
+        <div class="add-controls">
+            <input type="text" id="newSiteInput" placeholder="URL: e.g. github.com">
+            <input type="text" id="newNoteInput" placeholder="Note: e.g. Developer Community">
+            <button onclick="addSite()" class="btn-generate" id="btnAdd">Add</button>
+        </div>
+    </div>
+</div>
+
+<div id="manageModal" class="modal-overlay" onclick="closeModals()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div style="font-weight: bold; font-size: 18px;" id="manageModalTitle">Batch Manage Data</div>
+        <textarea id="ioTextarea" class="io-area" placeholder="Format: domain,note (One per line)"></textarea>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button onclick="copyIOText()" class="btn-copy" id="btnIOCopy">Copy All</button>
+            <button onclick="processImport(false)" class="btn-outline" id="btnImport">Append</button>
+            <button onclick="processImport(true)" class="btn-generate" style="background-color: #d93025;" id="btnOverwrite">Overwrite</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    /**
+     * ==========================================
+     * 1. 国际化与状态管理
+     * ==========================================
+     */
+    
+    /** 定义多语言字典对象 */
+    const translations = {
+        zh: {
+            title: "网站指定搜索指令合成器",
+            lblKeyword: "搜索关键词",
+            lblCommand: "生成的指令",
+            lblSiteList: "目标网站一览",
+            btnGen: "生成指令",
+            btnCopy: "复制",
+            btnOpenAdd: "添加网站",
+            btnOpenManage: "导入/导出",
+            addModalTitle: "添加新网站",
+            manageModalTitle: "批量管理网站列表",
+            btnAdd: "添加",
+            btnImport: "增量导入",
+            btnOverwrite: "覆盖导入",
+            btnIOCopy: "复制全部",
+            placeholderKey: "输入搜索关键词...",
+            placeholderRes: "指令将在此处生成...",
+            placeholderAdd: "输入域名 (如: zhihu.com)",
+            placeholderNote: "备注 (如: 知乎问答)",
+            placeholderIO: "格式: 域名,备注 (每行一个)",
+            emptyAlert: "请填写关键词并至少勾选一个网站",
+            copySuccess: "复制成功！",
+            copyFail: "复制失败，请手动选择复制"
+        },
+        en: {
+            title: "Site-Specific Search Command Generator",
+            lblKeyword: "Keyword",
+            lblCommand: "Command",
+            lblSiteList: "Target Sites",
+            btnGen: "Generate",
+            btnCopy: "Copy",
+            btnOpenAdd: "Add Site",
+            btnOpenManage: "Import/Export",
+            addModalTitle: "Add New Site",
+            manageModalTitle: "Batch Manage Sites",
+            btnAdd: "Add",
+            btnImport: "Append",
+            btnOverwrite: "Overwrite",
+            btnIOCopy: "Copy All",
+            placeholderKey: "Enter keywords...",
+            placeholderRes: "Command will appear here...",
+            placeholderAdd: "URL (e.g. github.com)",
+            placeholderNote: "Note (e.g. Code Repo)",
+            placeholderIO: "Format: domain,note (One per line)",
+            emptyAlert: "Please enter keywords and select at least one site",
+            copySuccess: "Copied!",
+            copyFail: "Copy failed, please copy manually"
+        }
+    };
+
+    /** 初始化当前语言（从本地存储读取或默认为英文） */
+    let currentLang = localStorage.getItem('lang') || 'en';
+    /** 初始化网站数据列表（从本地存储读取） */
+    let sites = JSON.parse(localStorage.getItem('sites')) || [];
+
+    /** * 将当前的网站列表和语言设置持久化到本地存储
+     */
+    function saveData() {
+        localStorage.setItem('sites', JSON.stringify(sites));
+        localStorage.setItem('lang', currentLang);
+    }
+
+    /**
+     * ==========================================
+     * 2. 核心指令生成逻辑
+     * ==========================================
+     */
+
+    /** * 根据关键词和选中的网站生成搜索引擎指令 (site:xxx.com)
+     */
+    function generateCommand() {
+        // 获取并清除关键词空格
+        const query = document.getElementById('searchInput').value.trim();
+        // 筛选出已勾选的网站并转化为 site: 语法
+        const selectedSites = sites.filter(s => s.checked).map(s => `site:${s.url}`);
+
+        // 验证非法输入
+        if (!query || selectedSites.length === 0) {
+            alert(translations[currentLang].emptyAlert);
+            return;
+        }
+
+        // 处理多个 site 语法的拼接逻辑
+        const sitePart = selectedSites.length > 1 
+            ? `(${selectedSites.join(' OR ')})` 
+            : selectedSites[0];
+
+        // 输出最终指令到结果框
+        document.getElementById('resultInput').value = `${query} ${sitePart}`;
+    }
+
+    /** * 异步函数：将生成的指令复制到系统剪贴板
+     */
+    async function copyToClipboard() {
+        const text = document.getElementById('resultInput').value;
+        if (!text) return;
+
+        try {
+            // 调用系统剪贴板 API
+            await navigator.clipboard.writeText(text);
+            const btn = document.getElementById('btnCopy');
+            const originalText = btn.textContent;
+            // 反馈复制成功状态
+            btn.textContent = translations[currentLang].copySuccess;
+            setTimeout(() => btn.textContent = originalText, 1500);
+        } catch (err) {
+            // 处理复制失败的情况
+            alert(translations[currentLang].copyFail);
+        }
+    }
+
+    /**
+     * ==========================================
+     * 3. 弹窗控制与管理逻辑
+     * ==========================================
+     */
+
+    /** * 打开添加单个网站的弹窗
+     */
+    function openAddModal() {
+        document.getElementById('addModal').style.display = 'flex';
+        document.getElementById('newSiteInput').focus();
+    }
+
+    /** * 打开批量管理弹窗，并将当前数据导出为文本显示在文本域中
+     */
+    function openManageModal() {
+        // 导出时将对象列表转为 "域名,备注" 格式的字符串
+        document.getElementById('ioTextarea').value = sites.map(s => s.note ? `${s.url},${s.note}` : s.url).join('\n');
+        document.getElementById('manageModal').style.display = 'flex';
+    }
+
+    /** * 关闭所有模态弹窗
+     */
+    function closeModals() {
+        document.getElementById('addModal').style.display = 'none';
+        document.getElementById('manageModal').style.display = 'none';
+    }
+
+    /** * 处理新增单个网站逻辑
+     */
+    function addSite() {
+        const input = document.getElementById('newSiteInput');
+        const noteInput = document.getElementById('newNoteInput');
+        // 清理域名格式，只保留根域名/子域名部分
+        const url = input.value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0];
+        const note = noteInput.value.trim();
+        // 若域名有效且不存在于列表，则添加
+        if (url && !sites.find(s => s.url === url)) {
+            sites.push({ url, note, checked: true });
+            input.value = '';
+            noteInput.value = '';
+            saveData();
+            renderList();
+            closeModals();
+        }
+    }
+
+    /** * 复制批量管理弹窗中 textarea 的所有内容
+     */
+    async function copyIOText() {
+        const text = document.getElementById('ioTextarea').value;
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            const btn = document.getElementById('btnIOCopy');
+            const originalText = btn.textContent;
+            btn.textContent = translations[currentLang].copySuccess;
+            setTimeout(() => btn.textContent = originalText, 1500);
+        } catch (err) {
+            alert(translations[currentLang].copyFail);
+        }
+    }
+
+    /** * 批量导入逻辑处理
+     * @param {boolean} isOverwrite - 是否清空现有列表进行覆盖导入
+     */
+    function processImport(isOverwrite) {
+        const text = document.getElementById('ioTextarea').value;
+        // 分割行并过滤空行
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        
+        // 解析 "域名,备注" 格式
+        const newSites = lines.map(line => {
+            const parts = line.split(',');
+            return { 
+                url: parts[0].trim().replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0], 
+                note: parts[1] ? parts[1].trim() : '', 
+                checked: true 
+            };
+        });
+        
+        // 执行覆盖或追加逻辑
+        if (isOverwrite) sites = newSites;
+        else newSites.forEach(ns => { if(!sites.find(s=>s.url===ns.url)) sites.push(ns); });
+        
+        saveData();
+        renderList();
+        closeModals();
+    }
+
+    /** * 根据索引从列表中删除特定网站
+     * @param {number} index - 数组索引
+     */
+    function deleteSite(index) {
+        sites.splice(index, 1);
+        saveData();
+        renderList();
+    }
+
+    /** * 切换网站的勾选状态
+     * @param {number} index - 数组索引
+     */
+    function toggleCheck(index) {
+        sites[index].checked = !sites[index].checked;
+        saveData();
+    }
+
+    /** * 根据 sites 数组动态渲染网站列表 HTML 结构
+     */
+    function renderList() {
+        const cont = document.getElementById('siteList');
+        cont.innerHTML = '';
+        sites.forEach((s, i) => {
+            const div = document.createElement('div');
+            div.className = 'item-row';
+            div.innerHTML = `
+                <input type="checkbox" id="site-${i}" ${s.checked?'checked':''} onchange="toggleCheck(${i})">
+                <label for="site-${i}">
+                    <span>${s.url}</span>
+                    ${s.note ? `<span class="site-note">(${s.note})</span>` : ''}
+                </label>
+                <span class="delete-btn" onclick="deleteSite(${i})">&times;</span>
+            `;
+            cont.appendChild(div);
+        });
+    }
+
+    /**
+     * ==========================================
+     * 4. 国际化 UI 更新
+     * ==========================================
+     */
+
+    /** * 根据当前选中的语言 (currentLang) 更新页面所有静态文本和占位符
+     */
+    function updateUIStrings() {
+        const t = translations[currentLang];
+        document.getElementById('title').textContent = t.title;
+        document.getElementById('lblKeyword').textContent = t.lblKeyword;
+        document.getElementById('lblCommand').textContent = t.lblCommand;
+        document.getElementById('lblSiteList').textContent = t.lblSiteList;
+        document.getElementById('btnGen').textContent = t.btnGen;
+        document.getElementById('btnCopy').textContent = t.btnCopy;
+        document.getElementById('btnOpenAdd').textContent = t.btnOpenAdd;
+        document.getElementById('btnOpenManage').textContent = t.btnOpenManage;
+        document.getElementById('addModalTitle').textContent = t.addModalTitle;
+        document.getElementById('manageModalTitle').textContent = t.manageModalTitle;
+        document.getElementById('btnAdd').textContent = t.btnAdd;
+        document.getElementById('btnImport').textContent = t.btnImport;
+        document.getElementById('btnOverwrite').textContent = t.btnOverwrite;
+        document.getElementById('btnIOCopy').textContent = t.btnIOCopy;
+        document.getElementById('searchInput').placeholder = t.placeholderKey;
+        document.getElementById('resultInput').placeholder = t.placeholderRes;
+        document.getElementById('newSiteInput').placeholder = t.placeholderAdd;
+        document.getElementById('newNoteInput').placeholder = t.placeholderNote;
+        document.getElementById('ioTextarea').placeholder = t.placeholderIO;
+    }
+
+    /** * 语言切换回调函数
+     * @param {string} val - 语言代码 ('zh' 或 'en')
+     */
+    function changeLang(val) {
+        currentLang = val;
+        saveData();
+        updateUIStrings();
+    }
+
+    /** * 监听输入框的回车键事件，按下即触发指令生成
+     */
+    document.getElementById('searchInput').addEventListener('keypress', (e) => { 
+        if (e.key === 'Enter') generateCommand(); 
+    });
+
+    /** * 页面加载完成后，初始化 UI 文本和列表数据
+     */
+    window.onload = () => {
+        updateUIStrings();
+        renderList();
+    };
+</script>
+
+</body>
+</html>
